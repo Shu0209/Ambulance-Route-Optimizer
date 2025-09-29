@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚑 Ambulance Route Optimizer</title>
+<style>
+  body { font-family: Arial, sans-serif; margin:0; padding:20px; background:#f5f5f5; }
+  h1 { text-align:center; color:#d32f2f; }
+  .container { display:flex; flex-direction:column; align-items:center; }
+  #graph-container { width:90%; max-width:800px; aspect-ratio:3/2; background:white; border:2px solid #333; margin:20px 0; box-shadow:0 4px 8px rgba(0,0,0,0.1); }
+  #graph { width:100%; height:100%; }
+  .controls, #results-panel { margin:10px 0; padding:15px; background:white; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); width:80%; display:flex; flex-wrap:wrap; justify-content:center; gap:10px; text-align:center; }
+  button { padding:10px 15px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; transition:0.3s; }
+  button:hover { background:#388E3C; transform:translateY(-2px); }
+  select { padding:8px; border:1px solid #ddd; border-radius:4px; }
+  #path-result { font-weight:bold; font-size:18px; margin-bottom:10px; }
+  #time-result { font-size:24px; color:#d32f2f; font-weight:bold; }
+  .path-edge { stroke:#FFEB3B !important; stroke-width:4 !important; animation:pulse 1.5s infinite; }
+  .path-edge-label { fill:#FFC107 !important; font-weight:bold !important; }
+  @keyframes pulse { 0%{opacity:0.7;} 50%{opacity:1;} 100%{opacity:0.7;} }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🚑 Ambulance Route Optimizer</h1>
+  <h3>Using Dijkstra's Algorithm (Optimized)</h3>
+
+  <div class="controls">
+    <div>
+      <label for="start-node">Start:</label>
+      <select id="start-node">
+        <option value="A">A (Ambulance)</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        
+      </select>
+    </div>
+    <div>
+      <label for="end-node">Destination:</label>
+      <select id="end-node">
+        <option value="H1">H1 (Hospital 1)</option>
+        <option value="H2">H2 (Hospital 2)</option>
+        
+      </select>
+    </div>
+    <button id="find-path">Find Shortest Path</button>
+  </div>
+
+  <div id="graph-container">
+    <svg id="graph" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <div id="results-panel">
+    <div id="path-result">Select start and destination to find path</div>
+    <div id="time-result"></div>
+  </div>
+</div>
+
+<script>
+/********************
+ * GRAPH DATA
+ ********************/
+const originalGraph = new Map([
+  ["A", new Map([["B", 4], ["C", 2]])],
+  ["B", new Map([["A", 4], ["H1", 5], ["C", 1]])],
+  ["C", new Map([["A", 2], ["B", 1], ["H2", 3]])],
+  ["H1", new Map([["B", 5], ["H2", 2]])],
+  ["H2", new Map([["C", 3], ["H1", 2]])]
+]);
+
+let graph = cloneGraph(originalGraph);
+
+const nodePositions = { A:{x:100,y:200}, B:{x:300,y:100}, C:{x:300,y:300}, H1:{x:500,y:100}, H2:{x:500,y:300} };
+
+/********************
+ * UTILITIES
+ ********************/
+function cloneGraph(src) { return new Map([...src].map(([node, edges]) => [node, new Map(edges)])); }
+
+/********************
+ * PRIORITY QUEUE
+ ********************/
+class MinHeap {
+  constructor() { this.heap=[]; }
+  push(obj) { this.heap.push(obj); this.bubbleUp(this.heap.length-1); }
+  pop() {
+    if(this.heap.length===0) return null;
+    const min=this.heap[0];
+    const end=this.heap.pop();
+    if(this.heap.length>0){ this.heap[0]=end; this.bubbleDown(0); }
+    return min;
+  }
+  bubbleUp(idx){ while(idx>0){ let parent=Math.floor((idx-1)/2); if(this.heap[parent].dist<=this.heap[idx].dist) break; [this.heap[parent],this.heap[idx]]=[this.heap[idx],this.heap[parent]]; idx=parent; } }
+  bubbleDown(idx){ const length=this.heap.length; while(true){ let left=2*idx+1,right=2*idx+2,smallest=idx; if(left<length && this.heap[left].dist<this.heap[smallest].dist) smallest=left; if(right<length && this.heap[right].dist<this.heap[smallest].dist) smallest=right; if(smallest===idx) break; [this.heap[smallest],this.heap[idx]]=[this.heap[idx],this.heap[smallest]]; idx=smallest; } }
+  size(){ return this.heap.length; }
+}
+
+/********************
+ * DIJKSTRA ALGORITHM
+ ********************/
+function dijkstra(graph,start,end){
+  const distances=new Map(), previous=new Map(), pq=new MinHeap();
+  graph.forEach((_, node)=>{ distances.set(node,node===start?0:Infinity); pq.push({node, dist: distances.get(node)}); });
+  while(pq.size()){
+    const {node:current, dist:currentDist}=pq.pop();
+    if(current===end) break;
+    if(currentDist>distances.get(current)) continue;
+    for(const [neighbor, weight] of graph.get(current)){
+      const newDist=currentDist+weight;
+      if(newDist<distances.get(neighbor)){
+        distances.set(neighbor,newDist);
+        previous.set(neighbor,current);
+        pq.push({node:neighbor, dist:newDist});
+      }
+    }
+  }
+  const path=[]; let curr=end;
+  while(curr && previous.has(curr)){ path.unshift(curr); curr=previous.get(curr);}
+  if(curr===start) path.unshift(start);
+  return {path, distance: distances.get(end)};
+}
+
+/********************
+ * SVG DRAWING
+ ********************/
+const graphSvg = document.getElementById("graph");
+let edgeElements={}, edgeLabelElements={};
+
+function drawGraph(){
+  graphSvg.innerHTML=""; edgeElements={}; edgeLabelElements={};
+
+  graph.forEach((edges,node)=>{
+    edges.forEach((weight,neighbor)=>{
+      const edgeKey=`${node}-${neighbor}`;
+      const revKey=`${neighbor}-${node}`;
+      if(edgeElements[revKey]) return;
+      const start=nodePositions[node], end=nodePositions[neighbor];
+      const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1",start.x); line.setAttribute("y1",start.y);
+      line.setAttribute("x2",end.x); line.setAttribute("y2",end.y);
+      line.setAttribute("stroke","#777"); line.setAttribute("stroke-width",2);
+      line.setAttribute("title",weight+" min"); // Tooltip
+      graphSvg.appendChild(line); edgeElements[edgeKey]=line;
+      const midX=(start.x+end.x)/2, midY=(start.y+end.y)/2;
+      const label=document.createElementNS("http://www.w3.org/2000/svg","text");
+      label.setAttribute("x",midX); label.setAttribute("y",midY);
+      label.setAttribute("fill","black"); label.setAttribute("font-size","12");
+      label.setAttribute("text-anchor","middle"); label.setAttribute("dominant-baseline","middle");
+      label.textContent=weight; graphSvg.appendChild(label); edgeLabelElements[edgeKey]=label;
+    });
+  });
+
+  for(const node in nodePositions){
+    const {x,y}=nodePositions[node];
+    const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    circle.setAttribute("cx",x); circle.setAttribute("cy",y); circle.setAttribute("r",15);
+    circle.setAttribute("fill",node.startsWith("H")?"#d32f2f":"#4CAF50"); graphSvg.appendChild(circle);
+    const text=document.createElementNS("http://www.w3.org/2000/svg","text");
+    text.setAttribute("x",x); text.setAttribute("y",y);
+    text.setAttribute("text-anchor","middle"); text.setAttribute("dominant-baseline","middle");
+    text.setAttribute("fill","white"); text.setAttribute("font-weight","bold");
+    text.textContent=node; graphSvg.appendChild(text);
+  }
+}
+
+/********************
+ * PATH FINDING
+ ********************/
+const startNodeSelect=document.getElementById("start-node");
+const endNodeSelect=document.getElementById("end-node");
+const findPathBtn=document.getElementById("find-path");
+const pathResult=document.getElementById("path-result");
+const timeResult=document.getElementById("time-result");
+
+function findShortestPath(){
+  const start=startNodeSelect.value, end=endNodeSelect.value;
+  const {path,distance}=dijkstra(graph,start,end);
+  Object.values(edgeElements).forEach(e=>e.classList.remove("path-edge"));
+  Object.values(edgeLabelElements).forEach(l=>l.classList.remove("path-edge-label"));
+  if(path.length===0){ pathResult.textContent=`❌ No path from ${start} to ${end}`; timeResult.textContent=""; return; }
+  pathResult.textContent=`🔵 Path: ${path.join(" → ")}`;
+  timeResult.textContent=`⏱️ Estimated time: ${distance} minutes`;
+  for(let i=0;i<path.length-1;i++){
+    const key=`${path[i]}-${path[i+1]}`, rev=`${path[i+1]}-${path[i]}`;
+    if(edgeElements[key]) edgeElements[key].classList.add("path-edge");
+    else if(edgeElements[rev]) edgeElements[rev].classList.add("path-edge");
+    if(edgeLabelElements[key]) edgeLabelElements[key].classList.add("path-edge-label");
+    else if(edgeLabelElements[rev]) edgeLabelElements[rev].classList.add("path-edge-label");
+  }
+}
+
+/********************
+ * INIT
+ ********************/
+findPathBtn.addEventListener("click", findShortestPath);
+drawGraph();
+// findShortestPath();
+
+// window.addEventListener('load', () => {
+//   startNodeSelect.value = "A";
+//   endNodeSelect.value = "H1";
+//   graph = cloneGraph(originalGraph); // reset graph
+//   drawGraph();
+//   findShortestPath();
+// });
+
+</script>
+</body>
+</html>
