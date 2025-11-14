@@ -1,210 +1,939 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🚑 Ambulance Route Optimizer</title>
-<style>
-  body { font-family: Arial, sans-serif; margin:0; padding:20px; background:#f5f5f5; }
-  h1 { text-align:center; color:#d32f2f; }
-  .container { display:flex; flex-direction:column; align-items:center; }
-  #graph-container { width:90%; max-width:800px; aspect-ratio:3/2; background:white; border:2px solid #333; margin:20px 0; box-shadow:0 4px 8px rgba(0,0,0,0.1); }
-  #graph { width:100%; height:100%; }
-  .controls, #results-panel { margin:10px 0; padding:15px; background:white; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); width:80%; display:flex; flex-wrap:wrap; justify-content:center; gap:10px; text-align:center; }
-  button { padding:10px 15px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; transition:0.3s; }
-  button:hover { background:#388E3C; transform:translateY(-2px); }
-  select { padding:8px; border:1px solid #ddd; border-radius:4px; }
-  #path-result { font-weight:bold; font-size:18px; margin-bottom:10px; }
-  #time-result { font-size:24px; color:#d32f2f; font-weight:bold; }
-  .path-edge { stroke:#FFEB3B !important; stroke-width:4 !important; animation:pulse 1.5s infinite; }
-  .path-edge-label { fill:#FFC107 !important; font-weight:bold !important; }
-  @keyframes pulse { 0%{opacity:0.7;} 50%{opacity:1;} 100%{opacity:0.7;} }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>City Ambulance Route Optimizer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1e88e5;
+      --primary-dark: #1565c0;
+      --success: #4caf50;
+      --danger: #e53935;
+      --warning: #ffb300;
+      --background: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-light: #64748b;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+      --shadow: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 30px rgba(0,0,0,0.12);
+      --radius: 12px;
+      --transition: all 0.2s ease;
+      --path-glow: #ffb300;
+    }
+
+    [data-theme="dark"] {
+      --background: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --text-light: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 1.5rem;
+      transition: var(--transition);
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-size: clamp(1.8rem, 5vw, 2.5rem);
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 0.25rem;
+      background: linear-gradient(135deg, var(--primary), #42a5f5);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    h3 {
+      font-weight: 500;
+      color: var(--text-light);
+      font-size: 1.1rem;
+    }
+
+    .theme-toggle {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .theme-toggle:hover { transform: scale(1.05); }
+
+   
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      transition: var(--transition);
+    }
+
+    .card:hover { box-shadow: var(--shadow-lg); }
+
+   
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .control-group.horizontal {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    label {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    select, input[type="text"], input[type="number"], input[type="range"] {
+      padding: 0.65rem 0.9rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: var(--surface);
+      color: var(--text);
+      transition: var(--transition);
+      width: 100%;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.2);
+    }
+
+    input[type="range"] {
+      height: 8px;
+      -webkit-appearance: none;
+      border-radius: 4px;
+      background: #e2e8f0;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    
+    .btn {
+      padding: 0.65rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(30, 136, 229, 0.3);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #388e3c;
+      transform: translateY(-1px);
+    }
+
+    .btn-sm {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+    }
+
+    
+    #graph-container {
+      width: 100%;
+      max-width: 1000px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    #graph {
+      width: 100%;
+      height: 100%;
+      min-height: 500px;
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+
+    [data-theme="dark"] #graph {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    }
+
+   
+    #results-panel {
+      text-align: center;
+      padding: 1.5rem;
+    }
+
+    #path-result {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-light);
+      word-break: break-word;
+    }
+
+    #time-result {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--primary);
+      background: linear-gradient(135deg, var(--primary), #42a5f5);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    
+    #error-message {
+      color: var(--danger);
+      font-size: 0.9rem;
+      text-align: center;
+      min-height: 1.4rem;
+      font-weight: 500;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .modal-content {
+      background: var(--surface);
+      padding: 1.75rem;
+      border-radius: var(--radius);
+      width: 90%;
+      max-width: 420px;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      animation: slideUp 0.3s ease;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .modal-close {
+      font-size: 1.6rem;
+      cursor: pointer;
+      color: var(--text-light);
+      transition: var(--transition);
+    }
+
+    .modal-close:hover { color: var(--text); transform: rotate(90deg); }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+
+    #modal-value {
+      min-width: 50px;
+      font-weight: 700;
+      color: var(--primary);
+      font-size: 1.1rem;
+    }
+
+    .modal-edge-info {
+      background: rgba(30, 136, 229, 0.1);
+      padding: 0.75rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+
+    
+    .edge-line {
+      stroke: #94a3b8;
+      stroke-width: 2.5;
+      transition: var(--transition);
+      cursor: pointer;
+    }
+
+    .edge-line:hover {
+      stroke: var(--primary);
+      stroke-width: 4;
+    }
+
+    .path-edge {
+      stroke: var(--path-glow) !important;
+      stroke-width: 5 !important;
+      filter: drop-shadow(0 0 8px var(--path-glow));
+      animation: pulse 1.8s infinite;
+    }
+
+    .path-edge-label {
+      fill: var(--warning) !important;
+      font-weight: 700 !important;
+      font-size: 14px !important;
+      filter: drop-shadow(0 0 4px rgba(0,0,0,0.5));
+    }
+
+    .node-circle {
+      cursor: move;
+      transition: var(--transition);
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    /* .node-circle:hover {
+      transform: scale(1.2);
+    } */
+
+    .dragging {
+      opacity: 0.7;
+      filter: brightness(1.3);
+    }
+
+    .edge-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-shadow: 0 0 6px white;
+      cursor: pointer;
+      user-select: none;
+    }
+
+   
+    .icon {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 0.8; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+
+    @media (max-width: 768px) {
+      .controls-grid {
+        grid-template-columns: 1fr;
+      }
+      .control-group.horizontal {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .btn { width: 100%; }
+    }
+  </style>
 </head>
 <body>
-<div class="container">
-  <h1>🚑 Ambulance Route Optimizer</h1>
-  <h3>Using Dijkstra's Algorithm (Optimized)</h3>
+  <div class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode">
+    <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+  </div>
 
-  <div class="controls">
-    <div>
-      <label for="start-node">Start:</label>
-      <select id="start-node">
-        <option value="A">A (Ambulance)</option>
-        <option value="B">B</option>
-        <option value="C">C</option>
-        
-      </select>
+  <div class="container">
+    <header>
+      <h1>City Ambulance Route Optimizer</h1>
+      <h3>Real-time Dijkstra Pathfinding with Traffic Simulation</h3>
+    </header>
+
+    <!-- Controls -->
+    <div class="controls-grid card">
+      <!-- Emergency Selection -->
+      <div class="control-group">
+        <label for="emergency-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
+          Emergency Location
+        </label>
+        <select id="emergency-node" aria-label="Select emergency location"></select>
+      </div>
+
+      <!-- Find Path Button -->
+      <div class="control-group" style="align-self: end;">
+        <button id="find-path" class="btn btn-primary">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Find Optimal Route
+        </button>
+      </div>
+
+      <!-- Add Node -->
+      <div class="control-group">
+        <label for="new-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          Add Intersection
+        </label>
+        <div class="control-group horizontal">
+          <input id="new-node" type="text" placeholder="e.g., I11" />
+          <button id="add-node" class="btn btn-success btn-sm">Add</button>
+        </div>
+      </div>
+
+      <!-- Add Edge -->
+      <div class="control-group">
+        <label>
+          <svg class="icon" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          Add Road Segment
+        </label>
+        <div class="control-group horizontal" style="gap: 0.5rem; flex-wrap: wrap;">
+          <input id="edge-start" type="text" placeholder="From" style="flex: 1 1 80px;" />
+          <input id="edge-end" type="text" placeholder="To" style="flex: 1 1 80px;" />
+          <input id="edge-weight" type="number" min="1" placeholder="min" style="flex: 0 1 70px;" />
+          <button id="add-edge" class="btn btn-success btn-sm">Add</button>
+        </div>
+      </div>
+
+      <div id="error-message" role="alert" aria-live="assertive"></div>
     </div>
-    <div>
-      <label for="end-node">Destination:</label>
-      <select id="end-node">
-        <option value="H1">H1 (Hospital 1)</option>
-        <option value="H2">H2 (Hospital 2)</option>
-        
-      </select>
+
+    <!-- Graph -->
+    <div id="graph-container">
+      <svg id="graph" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Interactive city road network graph"></svg>
     </div>
-    <button id="find-path">Find Shortest Path</button>
+
+    <!-- Results -->
+    <div id="results-panel" class="card">
+      <div id="path-result" aria-live="polite">Select an emergency location to calculate the optimal route</div>
+      <div id="time-result" aria-live="polite"></div>
+    </div>
   </div>
 
-  <div id="graph-container">
-    <svg id="graph" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg"></svg>
+  <!-- Traffic Modal -->
+  <div id="traffic-modal" class="modal" role="dialog" aria-labelledby="modal-title" aria-hidden="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span id="modal-title">Adjust Traffic</span>
+        <span class="modal-close" aria-label="Close">×</span>
+      </div>
+      <div class="modal-edge-info">
+        <div><strong>Edge:</strong> <span id="modal-edge">A1 → I1</span></div>
+        <div><strong>Base time:</strong> <span id="modal-base">3</span> min</div>
+      </div>
+      <label for="modal-slider">Traffic multiplier:</label>
+      <div class="slider-container">
+        <input type="range" id="modal-slider" min="0.5" max="3" step="0.1" value="1" />
+        <span id="modal-value">1.0×</span>
+      </div>
+      <div style="font-weight:600; margin-top:0.5rem;">
+        Adjusted time: <span id="modal-adjusted">3</span> min
+      </div>
+      <div style="display:flex; gap:0.5rem; margin-top:1.5rem; justify-content:flex-end;">
+        <button id="modal-reset" class="btn btn-sm" style="background:#94a3b8; color:white;">Reset</button>
+        <button id="modal-save" class="btn btn-primary btn-sm">Save</button>
+      </div>
+    </div>
   </div>
 
-  <div id="results-panel">
-    <div id="path-result">Select start and destination to find path</div>
-    <div id="time-result"></div>
-  </div>
-</div>
+  <script>
+    /* ==================== GRAPH DATA ==================== */
+    const originalGraph = new Map([
+      ["A1", new Map([["I1", 3], ["I2", 4]])],
+      ["A2", new Map([["I4", 3], ["I8", 4]])],
+      ["A3", new Map([["I9", 3], ["I10", 4]])],
+      ["I1", new Map([["A1", 3], ["I2", 2], ["I3", 3], ["I8", 4]])],
+      ["I2", new Map([["A1", 4], ["I1", 2], ["I3", 2], ["I4", 4]])],
+      ["I3", new Map([["I1", 3], ["I2", 2], ["I5", 3], ["H1", 5]])],
+      ["I4", new Map([["I2", 4], ["I5", 2], ["I6", 3], ["A2", 3]])],
+      ["I5", new Map([["I3", 3], ["I4", 2], ["I7", 3]])],
+      ["I6", new Map([["I4", 3], ["I7", 2], ["H2", 4]])],
+      ["I7", new Map([["I5", 3], ["I6", 2], ["H1", 3]])],
+      ["H1", new Map([["I3", 5], ["I7", 3]])],
+      ["H2", new Map([["I6", 4]])],
+      ["I8", new Map([["I1", 4], ["I9", 2], ["A2", 4]])],
+      ["I9", new Map([["I8", 2], ["I10", 3], ["A3", 3]])],
+      ["I10", new Map([["I9", 3], ["H3", 5], ["A3", 4]])],
+      ["H3", new Map([["I10", 5]])]
+    ]);
 
-<script>
-/********************
- * GRAPH DATA
- ********************/
-const originalGraph = new Map([
-  ["A", new Map([["B", 4], ["C", 2]])],
-  ["B", new Map([["A", 4], ["H1", 5], ["C", 1]])],
-  ["C", new Map([["A", 2], ["B", 1], ["H2", 3]])],
-  ["H1", new Map([["B", 5], ["H2", 2]])],
-  ["H2", new Map([["C", 3], ["H1", 2]])]
-]);
+    const nodePositions = {
+      A1:{x:100,y:300}, A2:{x:150,y:400}, A3:{x:450,y:150},
+      I1:{x:200,y:200}, I2:{x:300,y:250}, I3:{x:400,y:200},
+      I4:{x:300,y:350}, I5:{x:400,y:270}, I6:{x:500,y:350},
+      I7:{x:500,y:200}, H1:{x:600,y:150}, H2:{x:600,y:400},
+      I8:{x:200,y:100}, I9:{x:300,y:100}, I10:{x:400,y:100},
+      H3:{x:500,y:50}
+    };
 
-let graph = cloneGraph(originalGraph);
+    const nodeLabels = {
+      A1:"A1 (Ambulance 1)", A2:"A2 (Ambulance 2)", A3:"A3 (Ambulance 3)",
+      I1:"I1", I2:"I2", I3:"I3",
+      I4:"I4", I5:"I5", I6:"I6",
+      I7:"I7", H1:"H1", H2:"H2",
+      I8:"I8", I9:"I9", I10:"I10",
+      H3:"H3 (Hospital 3)"
+    };
 
-const nodePositions = { A:{x:100,y:200}, B:{x:300,y:100}, C:{x:300,y:300}, H1:{x:500,y:100}, H2:{x:500,y:300} };
+    
+    const edgeTrafficMap = new Map();
+    const modal = document.getElementById('traffic-modal');
+    const modalEdge = document.getElementById('modal-edge');
+    const modalBase = document.getElementById('modal-base');
+    const modalSlider = document.getElementById('modal-slider');
+    const modalValue = document.getElementById('modal-value');
+    const modalAdjusted = document.getElementById('modal-adjusted');
+    const modalClose = document.querySelector('.modal-close');
+    const modalSave = document.getElementById('modal-save');
+    const modalReset = document.getElementById('modal-reset');
+    let currentEdgeKey = null;
 
-/********************
- * UTILITIES
- ********************/
-function cloneGraph(src) { return new Map([...src].map(([node, edges]) => [node, new Map(edges)])); }
+    function openTrafficModal(edgeKey, baseWeight) {
+      currentEdgeKey = edgeKey;
+      const [a, b] = edgeKey.split('-');
+      modalEdge.textContent = `${nodeLabels[a] || a} → ${nodeLabels[b] || b}`;
+      modalBase.textContent = baseWeight;
+      const mul = edgeTrafficMap.get(edgeKey) || 1.0;
+      modalSlider.value = mul;
+      updateModal(mul, baseWeight);
+      modal.style.display = 'flex';
+      modal.setAttribute('aria-hidden', 'false');
+      modalSlider.focus();
+    }
 
-/********************
- * PRIORITY QUEUE
- ********************/
-class MinHeap {
-  constructor() { this.heap=[]; }
-  push(obj) { this.heap.push(obj); this.bubbleUp(this.heap.length-1); }
-  pop() {
-    if(this.heap.length===0) return null;
-    const min=this.heap[0];
-    const end=this.heap.pop();
-    if(this.heap.length>0){ this.heap[0]=end; this.bubbleDown(0); }
-    return min;
-  }
-  bubbleUp(idx){ while(idx>0){ let parent=Math.floor((idx-1)/2); if(this.heap[parent].dist<=this.heap[idx].dist) break; [this.heap[parent],this.heap[idx]]=[this.heap[idx],this.heap[parent]]; idx=parent; } }
-  bubbleDown(idx){ const length=this.heap.length; while(true){ let left=2*idx+1,right=2*idx+2,smallest=idx; if(left<length && this.heap[left].dist<this.heap[smallest].dist) smallest=left; if(right<length && this.heap[right].dist<this.heap[smallest].dist) smallest=right; if(smallest===idx) break; [this.heap[smallest],this.heap[idx]]=[this.heap[idx],this.heap[smallest]]; idx=smallest; } }
-  size(){ return this.heap.length; }
-}
+    function updateModal(mul, base) {
+      modalValue.textContent = mul.toFixed(1) + '×';
+      modalAdjusted.textContent = Math.round(base * mul);
+    }
 
-/********************
- * DIJKSTRA ALGORITHM
- ********************/
-function dijkstra(graph,start,end){
-  const distances=new Map(), previous=new Map(), pq=new MinHeap();
-  graph.forEach((_, node)=>{ distances.set(node,node===start?0:Infinity); pq.push({node, dist: distances.get(node)}); });
-  while(pq.size()){
-    const {node:current, dist:currentDist}=pq.pop();
-    if(current===end) break;
-    if(currentDist>distances.get(current)) continue;
-    for(const [neighbor, weight] of graph.get(current)){
-      const newDist=currentDist+weight;
-      if(newDist<distances.get(neighbor)){
-        distances.set(neighbor,newDist);
-        previous.set(neighbor,current);
-        pq.push({node:neighbor, dist:newDist});
+    modalSlider.addEventListener('input', () => {
+      const mul = parseFloat(modalSlider.value);
+      const base = parseInt(modalBase.textContent);
+      updateModal(mul, base);
+    });
+
+    modalSave.onclick = () => {
+      edgeTrafficMap.set(currentEdgeKey, parseFloat(modalSlider.value));
+      closeModal();
+      drawGraph();
+      if (lastEmergency) findShortestPath();
+    };
+
+    modalReset.onclick = () => {
+      edgeTrafficMap.delete(currentEdgeKey);
+      closeModal();
+      drawGraph();
+      if (lastEmergency) findShortestPath();
+    };
+
+    modalClose.onclick = closeModal;
+    modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+    function closeModal() {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+      currentEdgeKey = null;
+    }
+
+   
+
+    const graphSvg = document.getElementById('graph');
+    let edgeElements = {};      
+    let edgeLabelElements = {};
+    let draggedNode = null;
+    let lastEmergency = null;   
+
+    function updateDropdowns() {
+      const sel = document.getElementById('emergency-node');
+      const cur = sel.value;
+      sel.innerHTML = '';
+      for (const node of originalGraph.keys()) {
+        if (node.startsWith('A') || node.startsWith('H')) continue;
+        const label = nodeLabels[node] || node;
+        sel.innerHTML += `<option value="${node}" ${node===cur?'selected':''}>${label}</option>`;
       }
     }
-  }
-  const path=[]; let curr=end;
-  while(curr && previous.has(curr)){ path.unshift(curr); curr=previous.get(curr);}
-  if(curr===start) path.unshift(start);
-  return {path, distance: distances.get(end)};
-}
 
-/********************
- * SVG DRAWING
- ********************/
-const graphSvg = document.getElementById("graph");
-let edgeElements={}, edgeLabelElements={};
+    function showError(msg) {
+      const el = document.getElementById('error-message');
+      el.textContent = msg;
+      setTimeout(() => el.textContent = '', 3000);
+    }
 
-function drawGraph(){
-  graphSvg.innerHTML=""; edgeElements={}; edgeLabelElements={};
+    function clearInputs(...ids) {
+      ids.forEach(id => document.getElementById(id).value = '');
+    }
 
-  graph.forEach((edges,node)=>{
-    edges.forEach((weight,neighbor)=>{
-      const edgeKey=`${node}-${neighbor}`;
-      const revKey=`${neighbor}-${node}`;
-      if(edgeElements[revKey]) return;
-      const start=nodePositions[node], end=nodePositions[neighbor];
-      const line=document.createElementNS("http://www.w3.org/2000/svg","line");
-      line.setAttribute("x1",start.x); line.setAttribute("y1",start.y);
-      line.setAttribute("x2",end.x); line.setAttribute("y2",end.y);
-      line.setAttribute("stroke","#777"); line.setAttribute("stroke-width",2);
-      line.setAttribute("title",weight+" min"); // Tooltip
-      graphSvg.appendChild(line); edgeElements[edgeKey]=line;
-      const midX=(start.x+end.x)/2, midY=(start.y+end.y)/2;
-      const label=document.createElementNS("http://www.w3.org/2000/svg","text");
-      label.setAttribute("x",midX); label.setAttribute("y",midY);
-      label.setAttribute("fill","black"); label.setAttribute("font-size","12");
-      label.setAttribute("text-anchor","middle"); label.setAttribute("dominant-baseline","middle");
-      label.textContent=weight; graphSvg.appendChild(label); edgeLabelElements[edgeKey]=label;
+    function addNode(name) {
+      if (!name || !(name = name.trim())) { showError('Node name cannot be empty'); return false; }
+      name = name.toUpperCase();
+      if (originalGraph.has(name)) { showError(`Node ${name} already exists`); return false; }
+
+      const x = Math.random() * 800 + 50;
+      const y = Math.random() * 500 + 50;
+      originalGraph.set(name, new Map());
+      nodePositions[name] = {x, y};
+      nodeLabels[name] = name;
+      updateDropdowns();
+      drawGraph();
+      showError('');
+      return true;
+    }
+
+    function addEdge(start, end, weight) {
+      if (!start || !end || weight==null) { showError('All fields required'); return false; }
+      start = start.trim().toUpperCase();
+      end   = end.trim().toUpperCase();
+      weight = parseInt(weight);
+      if (isNaN(weight) || weight <= 0) { showError('Weight must be > 0'); return false; }
+      if (!originalGraph.has(start) || !originalGraph.has(end)) { showError('Node not found'); return false; }
+      if (start === end) { showError('Start ≠ End'); return false; }
+
+      const startMap = originalGraph.get(start);
+      const endMap   = originalGraph.get(end);
+      if (startMap.has(end)) { showError('Edge already exists'); return false; }
+
+      startMap.set(end, weight);
+      endMap.set(start, weight);
+      drawGraph();
+      showError('');
+      return true;
+    }
+
+    class MinHeap {
+      constructor() { this.heap = []; }
+      push(o) { this.heap.push(o); this._up(this.heap.length-1); }
+      pop() {
+        if (!this.heap.length) return null;
+        const min = this.heap[0];
+        const end = this.heap.pop();
+        if (this.heap.length) { this.heap[0] = end; this._down(0); }
+        return min;
+      }
+      _up(i) {
+        while (i>0) {
+          const p = (i-1)>>1;
+          if (this.heap[p].dist <= this.heap[i].dist) break;
+          [this.heap[p], this.heap[i]] = [this.heap[i], this.heap[p]];
+          i = p;
+        }
+      }
+      _down(i) {
+        const len = this.heap.length;
+        while (true) {
+          let l = 2*i+1, r = 2*i+2, s = i;
+          if (l<len && this.heap[l].dist < this.heap[s].dist) s = l;
+          if (r<len && this.heap[r].dist < this.heap[s].dist) s = r;
+          if (s===i) break;
+          [this.heap[s], this.heap[i]] = [this.heap[i], this.heap[s]];
+          i = s;
+        }
+      }
+      size() { return this.heap.length; }
+    }
+
+    function dijkstra(graph, start, goal) {
+      const dist = new Map(), prev = new Map(), pq = new MinHeap();
+      graph.forEach((_, n) => {
+        const d = n===start ? 0 : Infinity;
+        dist.set(n, d);
+        pq.push({node:n, dist:d});
+      });
+      while (pq.size()) {
+        const {node:u, dist:d} = pq.pop();
+        if (u===goal) break;
+        if (d > dist.get(u)) continue;
+        for (const [v, baseW] of graph.get(u)) {
+          const key = `${u}-${v}`;
+          const mul = edgeTrafficMap.get(key) || edgeTrafficMap.get(`${v}-${u}`) || 1.0;
+          const w = Math.round(baseW * mul);
+          const nd = d + w;
+          if (nd < dist.get(v)) {
+            dist.set(v, nd);
+            prev.set(v, u);
+            pq.push({node:v, dist:nd});
+          }
+        }
+      }
+      const path = [];
+      let cur = goal;
+      while (prev.has(cur)) {
+        path.unshift(cur);
+        cur = prev.get(cur);
+      }
+      if (dist.get(start) === 0) path.unshift(start);
+      return {path, distance: dist.get(goal)};
+    }
+
+    function findNearestNode(start, candidates) {
+      let bestDist = Infinity, bestNode = null, bestPath = [];
+      for (const cand of candidates) {
+        const {path, distance} = dijkstra(originalGraph, start, cand);
+        if (distance < bestDist) {
+          bestDist = distance;
+          bestNode = cand;
+          bestPath = path;
+        }
+      }
+      return {nearestNode:bestNode, path:bestPath, distance:bestDist};
+    }
+
+    function findShortestPath() {
+      const emergency = document.getElementById('emergency-node').value.trim();
+      if (!emergency) {
+        document.getElementById('path-result').textContent = 'Please select an emergency location';
+        document.getElementById('time-result').textContent = '';
+        return;
+      }
+      lastEmergency = emergency;
+
+      const ambulances = [...originalGraph.keys()].filter(n => n.startsWith('A'));
+      const hospitals  = [...originalGraph.keys()].filter(n => n.startsWith('H'));
+
+      const toAmbulance = findNearestNode(emergency, ambulances);
+      const toHospital  = findNearestNode(emergency, hospitals);
+
+      if (!toAmbulance.nearestNode || !toHospital.nearestNode) {
+        document.getElementById('path-result').textContent = 'No valid route found';
+        document.getElementById('time-result').textContent = '';
+        return;
+      }
+
+      const revToAmb = toAmbulance.path.slice().reverse();
+      const fullPath = [...revToAmb, ...toHospital.path.slice(1)];
+      const total = toAmbulance.distance + toHospital.distance;
+
+      document.getElementById('path-result').textContent =
+        `Optimal Path: ${fullPath.map(n => nodeLabels[n]||n).join(' → ')}`;
+      document.getElementById('time-result').textContent =
+        `${total} min`;
+
+      highlightPath(fullPath);
+    }
+
+    function highlightPath(path) {
+      Object.values(edgeElements).forEach(el => el.classList.remove('path-edge'));
+      Object.values(edgeLabelElements).forEach(el => el.classList.remove('path-edge-label'));
+
+      for (let i = 0; i < path.length-1; i++) {
+        const a = path[i], b = path[i+1];
+        const fwd = `${a}-${b}`, rev = `${b}-${a}`;
+        if (edgeElements[fwd]) edgeElements[fwd].classList.add('path-edge');
+        else if (edgeElements[rev]) edgeElements[rev].classList.add('path-edge');
+
+        if (edgeLabelElements[fwd]) edgeLabelElements[fwd].classList.add('path-edge-label');
+        else if (edgeLabelElements[rev]) edgeLabelElements[rev].classList.add('path-edge-label');
+      }
+    }
+
+    function drawGraph() {
+      graphSvg.innerHTML = '';
+      edgeElements = {};
+      edgeLabelElements = {};
+
+      originalGraph.forEach((neighbors, src) => {
+        neighbors.forEach((baseW, dst) => {
+          const key = `${src}-${dst}`;
+          const rev = `${dst}-${src}`;
+          if (edgeElements[rev]) return;
+
+          const s = nodePositions[src], e = nodePositions[dst];
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', s.x); line.setAttribute('y1', s.y);
+          line.setAttribute('x2', e.x); line.setAttribute('y2', e.y);
+          line.classList.add('edge-line');
+          line.dataset.key = key;
+          const mul = edgeTrafficMap.get(key) || edgeTrafficMap.get(rev) || 1.0;
+          const displayW = Math.round(baseW * mul);
+          line.setAttribute('title', `${displayW} min (×${mul.toFixed(1)})`);
+          graphSvg.appendChild(line);
+          edgeElements[key] = line;
+
+          line.addEventListener('click', () => openTrafficModal(key, baseW));
+
+          const mx = (s.x + e.x)/2, my = (s.y + e.y)/2;
+          const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          txt.setAttribute('x', mx); txt.setAttribute('y', my);
+          txt.setAttribute('fill', '#1e293b'); txt.setAttribute('font-size', 12);
+          txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('dominant-baseline', 'middle');
+          txt.classList.add('edge-label');
+          txt.textContent = displayW;
+          txt.dataset.key = key;
+          txt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openTrafficModal(key, baseW);
+          });
+          graphSvg.appendChild(txt);
+          edgeLabelElements[key] = txt;
+        });
+      });
+
+      for (const n in nodePositions) {
+        const {x,y} = nodePositions[n];
+        const circ = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circ.setAttribute('cx', x); circ.setAttribute('cy', y); circ.setAttribute('r', 18);
+        circ.setAttribute('fill', n.startsWith('H')?'#e53935':n.startsWith('A')?'#4caf50':'#1e88e5');
+        circ.classList.add('node-circle');
+        circ.dataset.node = n;
+        circ.setAttribute('tabindex', '0');
+        circ.setAttribute('role', 'button');
+        circ.setAttribute('aria-label', `Node ${n}`);
+        graphSvg.appendChild(circ);
+
+        const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        lbl.setAttribute('x', x); lbl.setAttribute('y', y);
+        lbl.setAttribute('text-anchor', 'middle'); lbl.setAttribute('dominant-baseline', 'middle');
+        lbl.setAttribute('fill', 'white'); lbl.setAttribute('font-weight', 'bold');
+        lbl.setAttribute('font-size', '11');
+        lbl.textContent = n;
+        graphSvg.appendChild(lbl);
+      }
+    }
+
+    function svgPoint(e, svg) {
+      const pt = svg.createSVGPoint();
+      const src = e.type.startsWith('touch') ? e.touches[0] : e;
+      pt.x = src.clientX; pt.y = src.clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    function startDrag(e) {
+      e.preventDefault();
+      const t = e.target;
+      if (t.classList.contains('node-circle')) {
+        draggedNode = t.dataset.node;
+        t.classList.add('dragging');
+      }
+    }
+    function drag(e) {
+      if (!draggedNode) return;
+      const {x,y} = svgPoint(e, graphSvg);
+      const boundedX = Math.max(20, Math.min(880, x));
+      const boundedY = Math.max(20, Math.min(580, y));
+      nodePositions[draggedNode] = {x:boundedX, y:boundedY};
+      drawGraph();
+      if (lastEmergency) findShortestPath();
+    }
+    function endDrag() {
+      if (draggedNode) {
+        const circ = graphSvg.querySelector(`.node-circle[data-node="${draggedNode}"]`);
+        if (circ) circ.classList.remove('dragging');
+        draggedNode = null;
+      }
+    }
+
+    graphSvg.addEventListener('mousedown', startDrag);
+    graphSvg.addEventListener('mousemove', drag);
+    graphSvg.addEventListener('mouseup', endDrag);
+    graphSvg.addEventListener('mouseleave', endDrag);
+    graphSvg.addEventListener('touchstart', startDrag, {passive:false});
+    graphSvg.addEventListener('touchmove', drag, {passive:false});
+    graphSvg.addEventListener('touchend', endDrag);
+
+    document.getElementById('find-path').addEventListener('click', findShortestPath);
+    document.getElementById('add-node').addEventListener('click', () => {
+      const name = document.getElementById('new-node').value;
+      if (addNode(name)) clearInputs('new-node');
     });
-  });
+    document.getElementById('add-edge').addEventListener('click', () => {
+      const s = document.getElementById('edge-start').value;
+      const e = document.getElementById('edge-end').value;
+      const w = document.getElementById('edge-weight').value;
+      if (addEdge(s, e, w)) clearInputs('edge-start','edge-end','edge-weight');
+    });
 
-  for(const node in nodePositions){
-    const {x,y}=nodePositions[node];
-    const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
-    circle.setAttribute("cx",x); circle.setAttribute("cy",y); circle.setAttribute("r",15);
-    circle.setAttribute("fill",node.startsWith("H")?"#d32f2f":"#4CAF50"); graphSvg.appendChild(circle);
-    const text=document.createElementNS("http://www.w3.org/2000/svg","text");
-    text.setAttribute("x",x); text.setAttribute("y",y);
-    text.setAttribute("text-anchor","middle"); text.setAttribute("dominant-baseline","middle");
-    text.setAttribute("fill","white"); text.setAttribute("font-weight","bold");
-    text.textContent=node; graphSvg.appendChild(text);
-  }
-}
+    
+    const themeToggle = document.getElementById('theme-toggle');
+    const body = document.body;
+    themeToggle.addEventListener('click', () => {
+      const isDark = body.getAttribute('data-theme') === 'dark';
+      body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    });
 
-/********************
- * PATH FINDING
- ********************/
-const startNodeSelect=document.getElementById("start-node");
-const endNodeSelect=document.getElementById("end-node");
-const findPathBtn=document.getElementById("find-path");
-const pathResult=document.getElementById("path-result");
-const timeResult=document.getElementById("time-result");
+    
+    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    body.setAttribute('data-theme', savedTheme);
 
-function findShortestPath(){
-  const start=startNodeSelect.value, end=endNodeSelect.value;
-  const {path,distance}=dijkstra(graph,start,end);
-  Object.values(edgeElements).forEach(e=>e.classList.remove("path-edge"));
-  Object.values(edgeLabelElements).forEach(l=>l.classList.remove("path-edge-label"));
-  if(path.length===0){ pathResult.textContent=`❌ No path from ${start} to ${end}`; timeResult.textContent=""; return; }
-  pathResult.textContent=`🔵 Path: ${path.join(" → ")}`;
-  timeResult.textContent=`⏱️ Estimated time: ${distance} minutes`;
-  for(let i=0;i<path.length-1;i++){
-    const key=`${path[i]}-${path[i+1]}`, rev=`${path[i+1]}-${path[i]}`;
-    if(edgeElements[key]) edgeElements[key].classList.add("path-edge");
-    else if(edgeElements[rev]) edgeElements[rev].classList.add("path-edge");
-    if(edgeLabelElements[key]) edgeLabelElements[key].classList.add("path-edge-label");
-    else if(edgeLabelElements[rev]) edgeLabelElements[rev].classList.add("path-edge-label");
-  }
-}
-
-/********************
- * INIT
- ********************/
-findPathBtn.addEventListener("click", findShortestPath);
-drawGraph();
-// findShortestPath();
-
-// window.addEventListener('load', () => {
-//   startNodeSelect.value = "A";
-//   endNodeSelect.value = "H1";
-//   graph = cloneGraph(originalGraph); // reset graph
-//   drawGraph();
-//   findShortestPath();
-// });
-
-</script>
+    updateDropdowns();
+    drawGraph();
+  </script>
 </body>
 </html>
